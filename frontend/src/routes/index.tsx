@@ -1,7 +1,7 @@
 import { Button } from '#/components/ui/button'
 import { createFileRoute } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
-import { Upload, Music, Loader2, X, Play } from 'lucide-react'
+import { Upload, Loader2, X, Play } from 'lucide-react'
 import { FaSpotify } from 'react-icons/fa'
 
 export const Route = createFileRoute('/')({ component: App })
@@ -116,7 +116,7 @@ function App() {
     <main className="page-wrap relative px-4 pb-12 pt-24 flex h-full min-h-screen flex-col items-center bg-background">
       <div className="text-center mb-8">
         <h1 className="text-5xl font-black mb-2 tracking-tighter italic text-primary uppercase">
-          ZAMZAM
+          SUZAM
         </h1>
         <p className="text-[10px] uppercase tracking-[0.4em] font-bold text-muted-foreground">
           {status}
@@ -134,20 +134,16 @@ function App() {
             onMouseUp={stopRecording}
             onTouchStart={startRecording}
             onTouchEnd={stopRecording}
-            className={`relative z-10 w-32 h-32 rounded-full border-4 border-background transition-all flex flex-col items-center justify-center shadow-xl ${
+            className={`relative cursor-pointer z-10 w-32 h-32 rounded-full border-4 border-background transition-all flex flex-col items-center justify-center shadow-xl ${
               isRecording ? 'bg-red-500 scale-95' : 'bg-primary hover:scale-105'
             }`}
           >
-            <Music
-              className={`h-8 w-8 mb-1 ${isRecording ? 'text-white' : 'text-primary-foreground'}`}
-            />
             <span className="text-[10px] font-black uppercase tracking-widest text-primary-foreground">
               {isRecording ? 'Release' : 'Hold'}
             </span>
           </button>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex gap-4">
           <input
             type="file"
@@ -158,7 +154,7 @@ function App() {
           />
           <Button
             variant="outline"
-            className="rounded-none border-2 border-primary/20 bg-secondary"
+            className="rounded-none border-2"
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="h-4 w-4 mr-2" /> Upload .WAV
@@ -166,7 +162,6 @@ function App() {
           {(audioURL || matches.length > 0) && (
             <Button
               variant="ghost"
-              className="rounded-none text-xs uppercase font-bold"
               onClick={() => {
                 setAudioURL(null)
                 setMatches([])
@@ -178,11 +173,10 @@ function App() {
           )}
         </div>
 
-        {/* Identification Progress / Results */}
         {audioURL && matches.length === 0 && (
           <div className="w-full max-w-sm relative">
-            <div className="relative z-10 w-full p-6 bg-secondary border-2 border-primary animate-in fade-in slide-in-from-bottom-4">
-              <p className="text-[10px] uppercase tracking-widest font-black text-muted-foreground mb-4">
+            <div className="relative z-10 w-full p-6 bg-secondary text-secondary-foreground border-2 border-primary animate-in fade-in slide-in-from-bottom-4">
+              <p className="text-[10px] uppercase tracking-widest font-black mb-4">
                 Clip Captured
               </p>
               <audio
@@ -206,12 +200,11 @@ function App() {
           </div>
         )}
 
-        {/* Top 5 Matches List */}
         {matches.map((match, idx) => (
           <div key={idx} className="relative group w-full">
-            <div className="relative z-10 flex items-center justify-between p-4 bg-secondary border-2 border-primary/20 group-hover:border-primary">
+            <div className="relative z-10 flex items-center justify-between p-4 bg-secondary text-secondary-foreground border-2 border-primary/20 group-hover:border-primary">
               <div className="flex items-center gap-4">
-                <div className="font-mono font-bold">{idx + 1}</div>
+                <div className="font-mono font-bold">{idx + 1}.</div>
                 <div>
                   <p className="font-bold text-sm leading-none mb-1">
                     {match.song.title}
@@ -224,7 +217,6 @@ function App() {
               <div className="flex items-center gap-4">
                 <div className="text-right">
                   <p className="text-[10px] font-black text-primary">SCORE</p>
-                  {/* USE match.score instead of match.Score */}
                   <p className="font-mono text-lg font-bold leading-none">
                     {match.score}
                   </p>
@@ -242,7 +234,7 @@ function App() {
         ))}
       </div>
 
-      <footer className="mt-auto pt-12 text-[9px] text-slate-500 uppercase tracking-[0.5em] font-bold text-center">
+      <footer className="mt-auto pt-12 text-[9px] opacity-60 uppercase tracking-[0.5em] font-bold text-center">
         Powered by Suzam Fingerprinting Engine v1.0
       </footer>
     </main>

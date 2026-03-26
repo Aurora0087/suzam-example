@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"math"
 	"sort"
 	"time"
 )
@@ -106,27 +107,43 @@ func FindMatch(db *sql.DB, queryHashes []Fingerprint) (Song, int, error) {
 	return s, maxScore, err
 }
 
+type MatchPoint struct {
+	SnippetTime int
+	DBTime      int
+}
+
 func FindTop5Matchs(db *sql.DB, queryHashes []Fingerprint) ([]SongWithMatchScore, error) {
-	hits := make(map[int]map[int]int)
+	matchesBySong := make(map[int][]Fingerprint)
 
 	for _, qf := range queryHashes {
-		rows, err := db.Query("SELECT song_id, offset FROM fingerprints WHERE hash = ?", int64(qf.Hash))
+		rows, err := db.Query("SELECT song_id, hash, offset FROM fingerprints WHERE hash = ?", int64(qf.Hash))
 		if err != nil {
 			continue
 		}
-
 		for rows.Next() {
-			var songID, dbOffset int
-			rows.Scan(&songID, &dbOffset)
-
-			dif := dbOffset - qf.AnchorTime
-			if hits[songID] == nil {
-				hits[songID] = make(map[int]int)
+			var songID int
+			var dbHash uint32
+			var dbOffset int
+			if err := rows.Scan(&songID, &dbHash, &dbOffset); err != nil {
+				continue
 			}
-			hits[songID][dif]++
+
+			matchesBySong[songID] = append(matchesBySong[songID], Fingerprint{
+				Hash:       dbHash,
+				AnchorTime: dbOffset,
+			})
 		}
 		rows.Close()
 	}
+
+	snippetLookup := make(map[uint32]int)
+	for _, qf := range queryHashes {
+		if _, exists := snippetLookup[qf.Hash]; !exists {
+			snippetLookup[qf.Hash] = qf.AnchorTime
+		}
+	}
+
+	snippetRef := queryHashes[0]
 
 	type tempScore struct {
 		id    int
@@ -134,36 +151,67 @@ func FindTop5Matchs(db *sql.DB, queryHashes []Fingerprint) ([]SongWithMatchScore
 	}
 	var results []tempScore
 
-	for songID, diffMap := range hits {
-		songMax := 0
-		for _, count := range diffMap {
-			if count > songMax {
-				songMax = count
+	for songId, fingerprints := range matchesBySong {
+		var dbRef Fingerprint
+		foundRef := false
+		for _, fp := range fingerprints {
+			if fp.Hash == snippetRef.Hash {
+				dbRef = fp
+				foundRef = true
+				break
 			}
 		}
-		results = append(results, tempScore{id: songID, score: songMax})
+
+		if !foundRef {
+			continue 
+		}
+
+		score := 0
+		for _, fp := range fingerprints {
+			snippetCurrOffset, exists := snippetLookup[fp.Hash]
+			if !exists {
+				continue
+			}
+
+			a := math.Abs(float64(snippetRef.AnchorTime - snippetCurrOffset))
+
+			b := math.Abs(float64(dbRef.AnchorTime - fp.AnchorTime))
+
+			c := math.Abs(a - b)
+
+			if c < 100 {
+				score++
+			}
+		}
+		results = append(results, tempScore{id: songId, score: score})
 	}
 
+	// 3. Sort by score descending
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].score > results[j].score
 	})
 
+	// 4. Limit to Top 5 and Fetch Metadata
 	limit := 5
 	if len(results) < 5 {
 		limit = len(results)
 	}
-	topResults := results[:limit]
 
 	finalMatches := []SongWithMatchScore{}
-	for _, res := range topResults {
+	for i := 0; i < limit; i++ {
+		res := results[i]
+		if res.score == 0 {
+			continue
+		}
+
 		var s Song
 		var authors string
 		err := db.QueryRow("SELECT id, spotify_id, title, authors, duration FROM songs WHERE id = ?", res.id).
 			Scan(&s.ID, &s.SpotifyID, &s.Title, &authors, &s.Duration)
-
 		if err != nil {
 			continue
 		}
+		s.Authors = authors
 
 		finalMatches = append(finalMatches, SongWithMatchScore{
 			Song:  s,

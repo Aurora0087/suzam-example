@@ -323,7 +323,7 @@ func (h *HandlerContext) IdentifySongFromSortClip(w http.ResponseWriter, r *http
 	if err != nil {
 		fmt.Printf("Identification error: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false, 
 			"error": "Failed to analyze audio",
 		})
