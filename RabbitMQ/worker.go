@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"suzam-example/db"
 	"suzam-example/suzam"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -20,13 +21,15 @@ type FingerprintTask struct {
 }
 
 func main() {
-	database, err := sql.Open("sqlite3", "./suzam.db")
+	dsn := os.Getenv("DATABASE_URL")
+	queueurl:=os.Getenv("RABBITMQ_HOST")
+	database, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer database.Close()
 
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	conn, err := amqp.Dial(queueurl)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -60,7 +63,7 @@ func main() {
 		fmt.Printf(" [] Fingerprinting Song: %s (ID: %d)\n", task.SpotifyID, task.QueueID)
 
 		var title, authors string
-		err = database.QueryRow("SELECT song_name, authors FROM queue WHERE id = ?", task.QueueID).Scan(&title, &authors)
+		err = database.QueryRow("SELECT song_name, authors FROM queue WHERE id = $1", task.QueueID).Scan(&title, &authors)
 		
 		 suzam.MakefingarprintFromSong(task.QueueID, "./output-data", task.FilePath, title, task.SpotifyID, authors, task.DurationSeconds, database)
 

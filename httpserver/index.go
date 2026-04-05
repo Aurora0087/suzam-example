@@ -16,10 +16,8 @@ import (
 	"suzam-example/utils"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
-
 
 func GetRoot(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("got / request\n")
@@ -50,8 +48,6 @@ type HandlerContext struct {
 	AMQPChan *amqp.Channel
 }
 
-
-
 func (h *HandlerContext) PostImportSong(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
@@ -75,7 +71,7 @@ func (h *HandlerContext) PostImportSong(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var exists bool
-	err = h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM songs WHERE spotify_id = ?)", spotifyID).Scan(&exists)
+	err = h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM songs WHERE spotify_id = $1)", spotifyID).Scan(&exists)
 	if exists {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -86,7 +82,7 @@ func (h *HandlerContext) PostImportSong(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var queueExists bool
-	err = h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM queue WHERE spotify_id = ? AND status != 'failed')", spotifyID).Scan(&queueExists)
+	err = h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM queue WHERE spotify_id = $1 AND status != 'failed')", spotifyID).Scan(&queueExists)
 	if queueExists {
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -97,8 +93,8 @@ func (h *HandlerContext) PostImportSong(w http.ResponseWriter, r *http.Request) 
 	}
 	queueID, err := db.AddToQueue(h.DB, spotifyID, "Pending Metadata", "Unknown")
 	if err != nil {
-		 w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(map[string]any{"error": "Database error"})
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]any{"error": "Database error"})
 		return
 	}
 
@@ -124,7 +120,6 @@ func (h *HandlerContext) PostImportSong(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":  true,
@@ -152,15 +147,17 @@ func (h *HandlerContext) GetQueueedSongs(w http.ResponseWriter, r *http.Request)
 	// Start with the base query
 	sqlQuery := "SELECT id, spotify_id, song_name, authors, status, err_message, added, completed FROM queue"
 	var args []any
+	paramIdx := 1
 
 	// Add WHERE clause if filtering by status
 	if status != "all" {
-		sqlQuery += " WHERE status = ?"
+		sqlQuery += fmt.Sprintf(" WHERE status = $%d", paramIdx)
 		args = append(args, status)
+		paramIdx++
 	}
 
 	// Add Ordering and Pagination
-	sqlQuery += " ORDER BY added DESC LIMIT ? OFFSET ?"
+	sqlQuery += fmt.Sprintf(" ORDER BY added DESC LIMIT $%d OFFSET $%d", paramIdx, paramIdx+1)
 	args = append(args, limit, ignore)
 
 	// 3. Execute Query
@@ -196,7 +193,6 @@ func (h *HandlerContext) GetQueueedSongs(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(queues)
 }
 
-
 type SongResponse struct {
 	ID        int      `json:"id"`
 	SpotifyID string   `json:"spotify_id"`
@@ -209,38 +205,61 @@ type SongResponse struct {
 func (h *HandlerContext) GetStoredSongs(w http.ResponseWriter, r *http.Request) {
 	// 1. Parse Query Parameters
 	query := r.URL.Query()
+	songTitle := query.Get("songTitle") // Extract the search term
 	ignore, _ := strconv.Atoi(query.Get("ignore"))
 	limit, _ := strconv.Atoi(query.Get("limit"))
-	if limit <= 0 { limit = 10 }
-
-	// 2. Get TOTAL COUNT from DB (New Step)
-	var totalCount int
-	err := h.DB.QueryRow("SELECT COUNT(*) FROM songs").Scan(&totalCount)
-	if err != nil {
-		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
-		return
+	if limit <= 0 {
+		limit = 10
 	}
 
-	// 3. Execute SQL Query for paginated data
-	rows, err := h.DB.Query(
-		"SELECT id, spotify_id, title, authors, duration, added FROM songs ORDER BY added DESC LIMIT ? OFFSET ?",
-		limit, ignore,
-	)
+	var totalCount int
+	var rows *sql.Rows
+	var err error
+
+	if songTitle != "" {
+		searchTerm := "%" + songTitle + "%"
+
+		// Get filtered count
+		err = h.DB.QueryRow("SELECT COUNT(*) FROM songs WHERE title LIKE $1", searchTerm).Scan(&totalCount)
+		if err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Get filtered data
+		rows, err = h.DB.Query(
+			"SELECT id, spotify_id, title, authors, duration, added FROM songs WHERE title LIKE $1 ORDER BY added DESC LIMIT $2 OFFSET $3",
+			searchTerm, limit, ignore,
+		)
+	} else {
+		// Standard: Get total count
+		err = h.DB.QueryRow("SELECT COUNT(*) FROM songs").Scan(&totalCount)
+		if err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Standard: Get all data
+		rows, err = h.DB.Query(
+			"SELECT id, spotify_id, title, authors, duration, added FROM songs ORDER BY added DESC LIMIT $1 OFFSET $2",
+			limit, ignore,
+		)
+	}
+
 	if err != nil {
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	// 4. Process Rows
+	// 3. Process Rows (Same as before)
 	songs := []SongResponse{}
 	for rows.Next() {
 		var id int
 		var spotifyID, title, authors, added string
 		var durationSec float64
 
-		err := rows.Scan(&id, &spotifyID, &title, &authors, &durationSec, &added)
-		if err != nil {
+		if err := rows.Scan(&id, &spotifyID, &title, &authors, &durationSec, &added); err != nil {
 			continue
 		}
 
@@ -254,7 +273,7 @@ func (h *HandlerContext) GetStoredSongs(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 
-	// 5. Send Wrapper Object (New Step)
+	// 4. Send JSON Response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
@@ -268,7 +287,6 @@ func (h *HandlerContext) GetStoredSongs(w http.ResponseWriter, r *http.Request) 
 
 	json.NewEncoder(w).Encode(response)
 }
-
 
 func (h *HandlerContext) IdentifySongFromSortClip(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -299,7 +317,6 @@ func (h *HandlerContext) IdentifySongFromSortClip(w http.ResponseWriter, r *http
 	os.MkdirAll(clipDir, os.ModePerm)
 	os.MkdirAll("./clip-identify", os.ModePerm)
 
-
 	savePath := filepath.Join(clipDir, uuid.New().String()+ext)
 	dst, err := os.Create(savePath)
 	if err != nil {
@@ -307,7 +324,7 @@ func (h *HandlerContext) IdentifySongFromSortClip(w http.ResponseWriter, r *http
 		json.NewEncoder(w).Encode(map[string]string{"error": "Internal save error"})
 		return
 	}
-	
+
 	_, err = io.Copy(dst, file)
 	dst.Close()
 	if err != nil {
@@ -324,8 +341,8 @@ func (h *HandlerContext) IdentifySongFromSortClip(w http.ResponseWriter, r *http
 		fmt.Printf("Identification error: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]any{
-			"success": false, 
-			"error": "Failed to analyze audio",
+			"success": false,
+			"error":   "Failed to analyze audio",
 		})
 		return
 	}

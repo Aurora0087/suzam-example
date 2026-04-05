@@ -35,7 +35,7 @@ export function QueueTable<TData, TValue>({
 
       <div className="relative z-10 overflow-hidden bg-secondary border-2">
         <Table>
-          <TableHeader className="bg-background/40">
+          <TableHeader className="bg-secondary">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow 
                 key={headerGroup.id} 
@@ -44,7 +44,7 @@ export function QueueTable<TData, TValue>({
                 {headerGroup.headers.map((header) => (
                   <TableHead 
                     key={header.id} 
-                    className="h-10 px-4 text-[10px] uppercase tracking-[0.25em] font-black text-slate-500"
+                    className="h-10 px-4 text-[10px] uppercase tracking-[0.25em] font-black text-secondary-foreground"
                   >
                     {header.isPlaceholder
                       ? null
@@ -62,7 +62,7 @@ export function QueueTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="group border-b border-primary/5 hover:bg-primary/5 transition-colors"
+                  className="group border-b border-primary/50 hover:bg-card/5 bg-card transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="px-4 py-3">

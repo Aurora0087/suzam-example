@@ -35,15 +35,16 @@ func main() {
 
 	// 1. Init DB
 
-	sqllitePath := "./suzam.db"
-	database, err := db.InitDB(sqllitePath)
+	dsn := os.Getenv("DATABASE_URL")
+	database, err := db.InitDB(dsn)
 	if err != nil {
 		fmt.Println("Can't connect to db, error :", err)
 		panic(err)
 	}
 
 	// 2. Init RabbitMQ
-	conn, _ := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	conn, _ := amqp.Dial(rabbitURL)
 	ch, _ := conn.Channel()
 	defer ch.Close()
 

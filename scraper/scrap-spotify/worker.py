@@ -1,5 +1,5 @@
 import pika
-import sqlite3
+import psycopg2
 import json
 import os
 import yt_dlp
@@ -9,8 +9,8 @@ from spotify_scraper import SpotifyClient
 from pika.exceptions import AMQPConnectionError, ConnectionClosedByBroker
 
 # --- CONFIGURATION ---
-DB_PATH = "../../suzam.db"
-RABBITMQ_HOST = "localhost"
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/suzam?sslmode=disable")
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST","localhost")
 SONG_DOWNLOAD_PROCESSING_QUEUE_NAME = "song_download_processing"
 SONG_FINGERPRINTING_PROCESSING_QUEUE_NAME = "song_fingerprinting_processing"
 
@@ -45,21 +45,21 @@ def calculate_video_score(video_meta, spotify_data):
     return score
 
 def update_db_status(queue_id, status, song_name=None, authors=None, err_msg=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
     try:
         if status == 'downloading':
             cursor.execute(
-                "UPDATE queue SET status=?, song_name=?, authors=? WHERE id=?",
+                "UPDATE queue SET status=%s, song_name=%s, authors=%s WHERE id=%s",
                 (status, song_name, authors, queue_id)
             )
         elif status == 'failed':
             cursor.execute(
-                "UPDATE queue SET status=?, err_message=? WHERE id=?",
+                "UPDATE queue SET status=%s, err_message=%s WHERE id=%s",
                 (status, err_msg, queue_id)
             )
         else:
-            cursor.execute("UPDATE queue SET status=? WHERE id=?", (status, queue_id))
+            cursor.execute("UPDATE queue SET status=%s WHERE id=%s", (status, queue_id))
         conn.commit()
     finally:
         conn.close()

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SongTable } from '#/components/songs/SongTable'
@@ -19,27 +19,35 @@ type SongsApiResponse = {
 }
 
 // 1. Fetcher Function
-const fetchSongs = async (): Promise<SongsApiResponse> => {
-  const response = await fetch('http://localhost:3333/v1/api/songs?limit=100&ignore=0')
+const fetchSongs = async (title: string): Promise<SongsApiResponse> => {
+  const response = await fetch(`http://localhost:3333/v1/api/songs?limit=100&ignore=0&songTitle=${encodeURIComponent(title)}`)
   if (!response.ok) {
     throw new Error('Failed to fetch songs from database')
   }
-  const data =response.json()
-  console.log(data);
-  
-  return data
+  return response.json()
 }
 
 function RouteComponent() {
   const queryClient = useQueryClient()
+  
+  const [searchInput, setSearchInput] = useState("") // Raw input value
+  const [debouncedSearch, setDebouncedSearch] = useState("") // Value used for API call
   const [spotifyUrl, setSpotifyUrl] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
 
-  // 2. React Query: Fetch Songs
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['songs'],
-    queryFn: fetchSongs,
+   useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+    }, 500)
+
+    return () => clearTimeout(handler)
+  }, [searchInput])
+  
+  const { data, isLoading, isError, isPlaceholderData } = useQuery({
+    queryKey: ['songs', debouncedSearch],
+    queryFn: () => fetchSongs(debouncedSearch),
+    placeholderData: (previousData) => previousData, // Keeps old data visible while loading new results
   })
 
   async function sendUrlForProcess() {
@@ -86,8 +94,11 @@ function RouteComponent() {
       <div className="w-full max-w-6xl">
         <div className="w-full mb-4 flex items-center gap-2">
           <InputGroup>
-            <InputGroupInput placeholder="Search indexed music..." />
-            <InputGroupAddon><Search /></InputGroupAddon>
+            <InputGroupInput placeholder="Search indexed music..."  value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)} />
+            <InputGroupAddon>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search />}
+            </InputGroupAddon>
             <InputGroupAddon align="inline-end">
               {totalCount} songs
             </InputGroupAddon>
