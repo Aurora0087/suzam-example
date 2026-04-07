@@ -14,6 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+
+
 interface QueueTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]

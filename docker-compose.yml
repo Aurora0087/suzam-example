@@ -41,6 +41,8 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     ports:
       - "3333:3333"
+    volumes:
+      - output_data:/app/output-data:ro
     depends_on:
       postgres:
         condition: service_healthy

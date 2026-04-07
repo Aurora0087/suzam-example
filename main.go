@@ -66,6 +66,11 @@ func main() {
 	mux.HandleFunc("/v1/api/songs/queues", ctx.GetQueueedSongs)
 	mux.HandleFunc("/v1/api/songs/identify", ctx.IdentifySongFromSortClip)
 
+	// Serve spectrogram & constellation map images from the output-data volume
+	// GET /images/{song_id}/spectrogram.png
+	// GET /images/{song_id}/peaks.png
+	mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir("./output-data"))))
+
 	fmt.Println("[  ]Server starting on :3333")
 
 	err = http.ListenAndServe(":3333", enableCORS(mux))

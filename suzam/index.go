@@ -54,7 +54,6 @@ func MakefingarprintFromSong(id int, outputFolder, inputFilePath, songTitle, spo
 	if err != nil {
 		fmt.Println(err)
 	}
-
 	fmt.Println("W : ", len(spectrogramFrames), ",H : ", len(spectrogramFrames[0]))
 
 	var minDB float64 = -80

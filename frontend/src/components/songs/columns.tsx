@@ -12,6 +12,10 @@ export type Song = {
 
 export const columns: ColumnDef<Song>[] = [
   {
+    accessorKey:"id",
+    header:"ID"
+  },
+  {
     accessorKey: "title",
     header: "Title",
     cell: ({ row }) => (

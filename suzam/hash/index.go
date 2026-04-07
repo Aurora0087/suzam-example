@@ -12,7 +12,7 @@ func GenerateHashes(peaks []constellation.Peak) []db.Fingerprint {
 
 	const (
 		TargetZoneTimeStart = 5
-		TargetZoneTimeEnd   = 30
+		TargetZoneTimeEnd   = 20
 		MaxTargetsPerAnchor = 10 
 	)
 
@@ -56,7 +56,7 @@ func GenerateHashesForClip(peaks []constellation.Peak) []mytypes.ClipFingerprint
 
 	const (
 		TargetZoneTimeStart = 5
-		TargetZoneTimeEnd   = 30
+		TargetZoneTimeEnd   = 20
 	)
 
 	for i := 0; i < len(peaks); i++ {
